@@ -65,6 +65,20 @@ class Payments extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+/// One row per driver-cash transaction: positive = advance (owner gives cash
+/// to driver), negative = recovery (driver returns cash). Tracked separately
+/// from expenses because advances are later accounted for — they don't reduce
+/// trip profit directly.
+class DriverCash extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get tripId =>
+      integer().references(Trips, #id, onDelete: KeyAction.cascade)();
+  RealColumn get amount => real()(); // positive = advance, negative = recovery
+  DateTimeColumn get date => dateTime().withDefault(currentDateAndTime)();
+  TextColumn get notes => text().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 /// Single-row key/value app settings table (PIN hash, theme, etc. are kept
 /// in SharedPreferences instead — this table is reserved for settings that
 /// benefit from being inside the backed-up database file, e.g. last backup
@@ -77,7 +91,7 @@ class AppSettingsTable extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Customers, Trips, Expenses, Payments, AppSettingsTable])
+@DriftDatabase(tables: [Customers, Trips, Expenses, Payments, DriverCash, AppSettingsTable])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
@@ -85,7 +99,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -93,8 +107,9 @@ class AppDatabase extends _$AppDatabase {
           await m.createAll();
         },
         onUpgrade: (m, from, to) async {
-          // Placeholder for future migrations. Keep each version bump
-          // additive (new columns/tables) so old data is never lost.
+          if (from < 2) {
+            await m.createTable(driverCash);
+          }
         },
       );
 
@@ -188,6 +203,32 @@ class AppDatabase extends _$AppDatabase {
           .get();
 
   // ---------------------------------------------------------------------
+  // Driver Cash
+  // ---------------------------------------------------------------------
+
+  Future<int> insertDriverCash(DriverCashCompanion entry) =>
+      into(driverCash).insert(entry);
+
+  Future<int> deleteDriverCash(int id) =>
+      (delete(driverCash)..where((t) => t.id.equals(id))).go();
+
+  Stream<List<DriverCashData>> watchDriverCashForTrip(int tripId) =>
+      (select(driverCash)
+            ..where((t) => t.tripId.equals(tripId))
+            ..orderBy([(t) => OrderingTerm.desc(t.date)]))
+          .watch();
+
+  /// Net cash for a trip: sum of all advances minus recoveries.
+  /// Positive = driver still owes money, negative = driver returned more
+  /// than advanced.
+  Future<double> netDriverCashForTrip(int tripId) async {
+    final rows = await (select(driverCash)
+          ..where((t) => t.tripId.equals(tripId)))
+        .get();
+    return rows.fold<double>(0, (sum, r) => sum + r.amount);
+  }
+
+  // ---------------------------------------------------------------------
   // Admin (delete all data / daily auto-backup)
   // ---------------------------------------------------------------------
 
@@ -196,6 +237,7 @@ class AppDatabase extends _$AppDatabase {
   /// after all deletes finish.
   Future<void> deleteAllData() async {
     await batch((b) {
+      b.deleteAll(driverCash);
       b.deleteAll(payments);
       b.deleteAll(expenses);
       b.deleteAll(trips);
