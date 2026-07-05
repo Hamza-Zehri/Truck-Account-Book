@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:truck_account_book/core/constants/app_constants.dart';
 import 'package:truck_account_book/core/theme/app_theme.dart';
 import 'package:truck_account_book/core/widgets/shared_widgets.dart';
-import 'package:truck_account_book/data/repositories/driver_cash_repository.dart';
 import 'package:truck_account_book/data/repositories/expense_repository.dart';
 import 'package:truck_account_book/data/repositories/payment_repository.dart';
 import 'package:truck_account_book/data/repositories/report_repository.dart';
@@ -18,7 +17,6 @@ class TripDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final summaryAsync = ref.watch(_tripSummaryProvider(tripId));
     final expensesAsync = ref.watch(tripExpensesProvider(tripId));
-    final driverCashAsync = ref.watch(tripDriverCashProvider(tripId));
     final paymentsAsync = ref.watch(tripPaymentsProvider(tripId));
 
     return Scaffold(
@@ -161,105 +159,8 @@ class TripDetailScreen extends ConsumerWidget {
                   }
                    return Column(
                      children: list.map((e) {
-                       return Dismissible(
-                         key: ValueKey('expense-${e.id}'),
-                         direction: DismissDirection.endToStart,
-                         background: Container(
-                           color: AppColors.pendingRed,
-                           alignment: Alignment.centerRight,
-                           padding: const EdgeInsets.symmetric(horizontal: 20),
-                           child: const Icon(Icons.delete, color: Colors.white),
-                         ),
-                         confirmDismiss: (_) async {
-                           return await showDialog<bool>(
-                             context: context,
-                             builder: (ctx) => AlertDialog(
-                               title: const Text('Delete expense?'),
-                               content: Text('Remove "${e.category}" (${formatMoney(e.amount)})?'),
-                               actions: [
-                                 TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                                 TextButton(
-                                   onPressed: () => Navigator.pop(ctx, true),
-                                   child: const Text('Delete', style: TextStyle(color: AppColors.pendingRed)),
-                                 ),
-                               ],
-                             ),
-                           );
-                         },
-                         onDismissed: (_) {
-                           ref.read(expenseRepositoryProvider).deleteExpense(e.id);
-                           ref.read(dashboardRefreshTickerProvider.notifier).state++;
-                         },
-                         child: ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const CircleAvatar(
-                            backgroundColor: Color(0x1AEF6C00),
-                            child: Icon(Icons.receipt, color: AppColors.expenseOrange, size: 18),
-                          ),
-                          title: Text(e.category),
-                          subtitle: Text(formatDate(e.date)),
-                          trailing: Text(formatMoney(e.amount),
-                              style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.expenseOrange)),
-                        ),
-                      );
-                    }).toList(),
-                  );
-                },
-                loading: () => const Center(child: CircularProgressIndicator()),
-                error: (e, st) => Text('Error: $e'),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const SectionHeader(title: 'Driver Cash'),
-                  const Spacer(),
-                  TextButton.icon(
-                    icon: const Icon(Icons.arrow_upward, size: 16, color: AppColors.expenseOrange),
-                    label: const Text('Advance', style: TextStyle(fontSize: 12)),
-                    onPressed: () => _showDriverCashDialog(context, ref, tripId, isAdvance: true),
-                  ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.arrow_downward, size: 16, color: AppColors.profitGreen),
-                    label: const Text('Recovery', style: TextStyle(fontSize: 12)),
-                    onPressed: () => _showDriverCashDialog(context, ref, tripId, isAdvance: false),
-                  ),
-                ],
-              ),
-              driverCashAsync.when(
-                data: (list) {
-                  if (list.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('No driver cash transactions.', style: TextStyle(color: AppColors.textMuted)),
-                    );
-                  }
-                  final net = list.fold<double>(0, (sum, c) => sum + c.amount);
-                  return Column(
-                    children: [
-                      Card(
-                        color: net >= 0
-                            ? AppColors.expenseOrange.withValues(alpha: 0.06)
-                            : AppColors.profitGreen.withValues(alpha: 0.06),
-                        child: ListTile(
-                          leading: Icon(
-                            net >= 0 ? Icons.arrow_upward : Icons.arrow_downward,
-                            color: net >= 0 ? AppColors.expenseOrange : AppColors.profitGreen,
-                          ),
-                          title: Text(net >= 0 ? 'Driver owes' : 'Excess recovered'),
-                          trailing: Text(
-                            formatMoney(net.abs()),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                              color: net >= 0 ? AppColors.expenseOrange : AppColors.profitGreen,
-                            ),
-                          ),
-                        ),
-                      ),
-                      ...list.map((c) {
-                        final isAdvance = c.amount >= 0;
                         return Dismissible(
-                          key: ValueKey('driver-cash-${c.id}'),
+                          key: ValueKey('expense-${e.id}'),
                           direction: DismissDirection.endToStart,
                           background: Container(
                             color: AppColors.pendingRed,
@@ -267,57 +168,46 @@ class TripDetailScreen extends ConsumerWidget {
                             padding: const EdgeInsets.symmetric(horizontal: 20),
                             child: const Icon(Icons.delete, color: Colors.white),
                           ),
-                          confirmDismiss: (_) async {
-                            return await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: Text(isAdvance ? 'Delete advance?' : 'Delete recovery?'),
-                                content: Text('Remove ${formatMoney(c.amount.abs())}?'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Delete', style: TextStyle(color: AppColors.pendingRed)),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                          confirmDismiss: (_) => _confirmDeleteExpense(context, e.category, e.amount),
                           onDismissed: (_) {
-                            ref.read(driverCashRepositoryProvider).deleteDriverCash(c.id);
+                            ref.read(expenseRepositoryProvider).deleteExpense(e.id);
                             ref.read(dashboardRefreshTickerProvider.notifier).state++;
                           },
                           child: ListTile(
-                            contentPadding: EdgeInsets.zero,
-                            leading: CircleAvatar(
-                              backgroundColor: isAdvance
-                                  ? AppColors.expenseOrange.withValues(alpha: 0.15)
-                                  : AppColors.profitGreen.withValues(alpha: 0.15),
-                              child: Icon(
-                                isAdvance ? Icons.arrow_upward : Icons.arrow_downward,
-                                color: isAdvance ? AppColors.expenseOrange : AppColors.profitGreen,
-                                size: 18,
-                              ),
-                            ),
-                            title: Text(isAdvance ? 'Cash to Driver' : 'Cash Recovered'),
-                            subtitle: Text(formatDate(c.date)),
-                            trailing: Text(
-                              isAdvance ? '-${formatMoney(c.amount)}' : formatMoney(c.amount.abs()),
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: isAdvance ? AppColors.expenseOrange : AppColors.profitGreen,
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
+                           contentPadding: EdgeInsets.zero,
+                           leading: const CircleAvatar(
+                             backgroundColor: Color(0x1AEF6C00),
+                             child: Icon(Icons.receipt, color: AppColors.expenseOrange, size: 18),
+                           ),
+                           title: Text(e.category),
+                           subtitle: Text(formatDate(e.date)),
+                           trailing: Row(
+                             mainAxisSize: MainAxisSize.min,
+                             children: [
+                               Text(formatMoney(e.amount),
+                                   style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.expenseOrange)),
+                               const SizedBox(width: 8),
+                               GestureDetector(
+                                 onTap: () async {
+                                   final confirmed = await _confirmDeleteExpense(context, e.category, e.amount);
+                                   if (confirmed == true) {
+                                     ref.read(expenseRepositoryProvider).deleteExpense(e.id);
+                                     ref.read(dashboardRefreshTickerProvider.notifier).state++;
+                                   }
+                                 },
+                                 child: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
+                               ),
+                             ],
+                           ),
+                         ),
+                       );
+                    }).toList(),
                   );
                 },
-                loading: () => const SizedBox(height: 8, child: Center(child: LinearProgressIndicator())),
+                loading: () => const Center(child: CircularProgressIndicator()),
                 error: (e, st) => Text('Error: $e'),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
               const SectionHeader(title: 'Payments'),
               paymentsAsync.when(
                 data: (list) {
@@ -367,67 +257,19 @@ class TripDetailScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _showDriverCashDialog(BuildContext context, WidgetRef ref, int tripId,
-      {required bool isAdvance}) async {
-    final amountCtrl = TextEditingController();
-    final notesCtrl = TextEditingController();
-    DateTime date = DateTime.now();
-
-    await showDialog(
+  static Future<bool?> _confirmDeleteExpense(BuildContext context, String category, double amount) {
+    return showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) => AlertDialog(
-          title: Text(isAdvance ? 'Cash to Driver' : 'Cash Recovery'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: amountCtrl,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(labelText: isAdvance ? 'Amount given' : 'Amount recovered'),
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Date'),
-                subtitle: Text(formatDate(date)),
-                trailing: const Icon(Icons.calendar_today, size: 18),
-                onTap: () async {
-                  final picked = await showDatePicker(
-                    context: ctx,
-                    initialDate: date,
-                    firstDate: DateTime(2020),
-                    lastDate: DateTime.now().add(const Duration(days: 1)),
-                  );
-                  if (picked != null) setState(() => date = picked);
-                },
-              ),
-              TextField(
-                controller: notesCtrl,
-                decoration: const InputDecoration(labelText: 'Notes (optional)'),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete expense?'),
+        content: Text('Remove "$category" (${formatMoney(amount)})?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: AppColors.pendingRed)),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            TextButton(
-              onPressed: () async {
-                final amount = double.tryParse(amountCtrl.text.trim());
-                if (amount == null || amount <= 0) return;
-                if (isAdvance) {
-                  await ref.read(driverCashRepositoryProvider).addAdvance(tripId, amount, date,
-                      notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim());
-                } else {
-                  await ref.read(driverCashRepositoryProvider).addRecovery(tripId, amount, date,
-                      notesCtrl.text.trim().isEmpty ? null : notesCtrl.text.trim());
-                }
-                ref.read(dashboardRefreshTickerProvider.notifier).state++;
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }

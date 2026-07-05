@@ -32,12 +32,15 @@ class Calculations {
     return remaining < 0 ? 0 : remaining;
   }
 
-  /// Dashboard-level profit = Total Income - Total Expenses.
+  /// Dashboard-level profit = Total Income - Total Expenses - Net Driver Cash.
+  /// Net driver cash positive (more advances than recoveries) reduces profit;
+  /// negative (more recoveries than advances) increases profit.
   static double dashboardProfit({
     required double totalIncome,
     required double totalExpenses,
+    double netDriverCash = 0,
   }) {
-    return totalIncome - totalExpenses;
+    return totalIncome - totalExpenses - netDriverCash;
   }
 
   static PaymentStatus statusFor({

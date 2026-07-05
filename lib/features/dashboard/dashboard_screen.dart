@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:truck_account_book/core/theme/app_theme.dart';
 import 'package:truck_account_book/core/widgets/shared_widgets.dart';
 import 'package:truck_account_book/data/repositories/customer_repository.dart';
+import 'package:truck_account_book/data/repositories/expense_repository.dart';
 import 'package:truck_account_book/data/repositories/report_repository.dart';
 import 'package:truck_account_book/data/repositories/trip_repository.dart';
 
@@ -15,6 +16,7 @@ class DashboardScreen extends ConsumerWidget {
     final today = ref.watch(todaySummaryProvider);
     final trips = ref.watch(allTripSummariesProvider);
     final ledgers = ref.watch(customerLedgerListProvider);
+    final expenses = ref.watch(allExpensesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -31,6 +33,7 @@ class DashboardScreen extends ConsumerWidget {
           ref.invalidate(todaySummaryProvider);
           ref.invalidate(allTripSummariesProvider);
           ref.invalidate(customerLedgerListProvider);
+          ref.invalidate(allExpensesProvider);
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -128,10 +131,10 @@ class DashboardScreen extends ConsumerWidget {
                   onTap: () => context.push('/expenses/new'),
                 ),
                 BigActionButton(
-                  label: 'Reports',
-                  icon: Icons.bar_chart,
+                  label: 'Driver Cash',
+                  icon: Icons.account_balance_wallet_outlined,
                   color: AppColors.primaryBlueLight,
-                  onTap: () => context.push('/reports'),
+                  onTap: () => context.push('/driver-cash'),
                 ),
               ],
             ),
@@ -191,6 +194,65 @@ class DashboardScreen extends ConsumerWidget {
                           style: const TextStyle(color: AppColors.pendingRed, fontWeight: FontWeight.w700),
                         ),
                         onTap: () => context.push('/customers/${l.customer.id}'),
+                      ),
+                    );
+                  }).toList(),
+                );
+              },
+              loading: () => const SizedBox.shrink(),
+              error: (e, st) => const SizedBox.shrink(),
+            ),
+            const SizedBox(height: 16),
+            const SectionHeader(title: 'Recent Expenses'),
+            expenses.when(
+              data: (list) {
+                final recent = list.take(5).toList();
+                if (recent.isEmpty) {
+                  return const EmptyState(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'No expenses yet',
+                    subtitle: 'Expenses will appear here once added.',
+                  );
+                }
+                return Column(
+                  children: recent.map((e) {
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ListTile(
+                        title: Text(e.category, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        subtitle: Text(formatDate(e.date)),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(formatMoney(e.amount),
+                                style: const TextStyle(fontWeight: FontWeight.w600, color: AppColors.expenseOrange)),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Delete expense?'),
+                                    content: Text('Remove "${e.category}" (${formatMoney(e.amount)})?'),
+                                    actions: [
+                                      TextButton(
+                                          onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Delete', style: TextStyle(color: AppColors.pendingRed)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true) {
+                                  ref.read(expenseRepositoryProvider).deleteExpense(e.id);
+                                  ref.read(dashboardRefreshTickerProvider.notifier).state++;
+                                }
+                              },
+                              child: const Icon(Icons.close, size: 18, color: AppColors.textMuted),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }).toList(),

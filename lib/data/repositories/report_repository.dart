@@ -10,6 +10,7 @@ class PeriodSummary {
   final int tripCount;
   final double totalIncome;
   final double totalExpenses;
+  final double netDriverCash;
   final double pendingPayments;
   final Map<String, double> expenseBreakdown;
 
@@ -17,6 +18,7 @@ class PeriodSummary {
     required this.tripCount,
     required this.totalIncome,
     required this.totalExpenses,
+    required this.netDriverCash,
     required this.pendingPayments,
     required this.expenseBreakdown,
   });
@@ -30,6 +32,7 @@ class PeriodSummary {
         tripCount: 0,
         totalIncome: 0,
         totalExpenses: 0,
+        netDriverCash: 0,
         pendingPayments: 0,
         expenseBreakdown: {},
       );
@@ -69,6 +72,7 @@ class ReportRepository {
 
     final trips = await db.tripsBetween(start, end);
     final expenses = await db.expensesBetween(start, end);
+    final driverCash = await db.netDriverCashBetween(start, end);
 
     final totalIncome = trips.fold<double>(0, (sum, t) => sum + t.tripAmount);
     final totalExpenses = expenses.fold<double>(0, (sum, e) => sum + e.amount);
@@ -89,10 +93,13 @@ class ReportRepository {
       breakdown.update(e.category, (v) => v + e.amount, ifAbsent: () => e.amount);
     }
 
+    final adjustedIncome = totalIncome + driverCash;
+
     return PeriodSummary(
       tripCount: trips.length,
-      totalIncome: totalIncome,
+      totalIncome: adjustedIncome,
       totalExpenses: totalExpenses,
+      netDriverCash: driverCash,
       pendingPayments: pending,
       expenseBreakdown: breakdown,
     );

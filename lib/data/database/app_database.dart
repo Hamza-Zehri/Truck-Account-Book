@@ -66,13 +66,11 @@ class Payments extends Table {
 }
 
 /// One row per driver-cash transaction: positive = advance (owner gives cash
-/// to driver), negative = recovery (driver returns cash). Tracked separately
-/// from expenses because advances are later accounted for — they don't reduce
-/// trip profit directly.
+/// to driver), negative = recovery (driver returns cash). Independently tracked
+/// from trips — advances reduce overall profit as an expense, recoveries
+/// increase it.
 class DriverCash extends Table {
   IntColumn get id => integer().autoIncrement()();
-  IntColumn get tripId =>
-      integer().references(Trips, #id, onDelete: KeyAction.cascade)();
   RealColumn get amount => real()(); // positive = advance, negative = recovery
   DateTimeColumn get date => dateTime().withDefault(currentDateAndTime)();
   TextColumn get notes => text().nullable()();
@@ -99,7 +97,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -107,7 +105,9 @@ class AppDatabase extends _$AppDatabase {
           await m.createAll();
         },
         onUpgrade: (m, from, to) async {
-          if (from < 2) {
+          if (from < 3) {
+            // Recreate driver_cash without tripId column.
+            await m.deleteTable('driver_cash');
             await m.createTable(driverCash);
           }
         },
@@ -172,6 +172,9 @@ class AppDatabase extends _$AppDatabase {
   Stream<List<Expense>> watchExpensesForTrip(int tripId) =>
       (select(expenses)..where((t) => t.tripId.equals(tripId))).watch();
 
+  Stream<List<Expense>> watchAllExpenses() =>
+      (select(expenses)..orderBy([(t) => OrderingTerm.desc(t.date)])).watch();
+
   Future<List<Expense>> expensesBetween(DateTime start, DateTime end) =>
       (select(expenses)
             ..where((t) =>
@@ -212,18 +215,26 @@ class AppDatabase extends _$AppDatabase {
   Future<int> deleteDriverCash(int id) =>
       (delete(driverCash)..where((t) => t.id.equals(id))).go();
 
-  Stream<List<DriverCashData>> watchDriverCashForTrip(int tripId) =>
-      (select(driverCash)
-            ..where((t) => t.tripId.equals(tripId))
-            ..orderBy([(t) => OrderingTerm.desc(t.date)]))
-          .watch();
+  Stream<List<DriverCashData>> watchAllDriverCash() =>
+      (select(driverCash)..orderBy([(t) => OrderingTerm.desc(t.date)])).watch();
 
-  /// Net cash for a trip: sum of all advances minus recoveries.
-  /// Positive = driver still owes money, negative = driver returned more
-  /// than advanced.
-  Future<double> netDriverCashForTrip(int tripId) async {
+  Future<List<DriverCashData>> driverCashBetween(DateTime start, DateTime end) =>
+      (select(driverCash)
+            ..where((t) =>
+                t.date.isBiggerOrEqualValue(start) & t.date.isSmallerThanValue(end)))
+          .get();
+
+  /// Net driver cash across all transactions: positive = total advances
+  /// outstanding, negative = more recovered than advanced.
+  Future<double> totalNetDriverCash() async {
+    final rows = await select(driverCash).get();
+    return rows.fold<double>(0, (sum, r) => sum + r.amount);
+  }
+
+  Future<double> netDriverCashBetween(DateTime start, DateTime end) async {
     final rows = await (select(driverCash)
-          ..where((t) => t.tripId.equals(tripId)))
+          ..where((t) =>
+              t.date.isBiggerOrEqualValue(start) & t.date.isSmallerThanValue(end)))
         .get();
     return rows.fold<double>(0, (sum, r) => sum + r.amount);
   }

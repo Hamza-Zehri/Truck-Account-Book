@@ -3,6 +3,7 @@ import 'package:truck_account_book/data/database/app_database.dart';
 import 'package:truck_account_book/features/customers/customer_detail_screen.dart';
 import 'package:truck_account_book/features/customers/customer_list_screen.dart';
 import 'package:truck_account_book/features/dashboard/dashboard_screen.dart';
+import 'package:truck_account_book/features/driver_cash/driver_cash_screen.dart';
 import 'package:truck_account_book/features/expenses/add_expense_screen.dart';
 import 'package:truck_account_book/features/payments/receive_payment_screen.dart';
 import 'package:truck_account_book/features/reports/reports_screen.dart';
@@ -29,6 +30,10 @@ final appRouter = GoRouter(
         GoRoute(path: '/reports', builder: (context, state) => const ReportsScreen()),
         GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
       ],
+    ),
+    GoRoute(
+      path: '/driver-cash',
+      builder: (context, state) => const DriverCashScreen(),
     ),
     GoRoute(
       path: '/search',

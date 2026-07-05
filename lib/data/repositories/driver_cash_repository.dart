@@ -6,22 +6,19 @@ class DriverCashRepository {
   final AppDatabase db;
   DriverCashRepository(this.db);
 
-  Stream<List<DriverCashData>> watchForTrip(int tripId) =>
-      db.watchDriverCashForTrip(tripId);
+  Stream<List<DriverCashData>> watchAll() => db.watchAllDriverCash();
 
-  Future<int> addAdvance(int tripId, double amount, DateTime date, String? notes) {
+  Future<int> addAdvance(double amount, DateTime date, String? notes) {
     return db.insertDriverCash(DriverCashCompanion.insert(
-      tripId: tripId,
-      amount: amount, // positive = advance to driver
+      amount: amount,
       date: Value(date),
       notes: Value(notes),
     ));
   }
 
-  Future<int> addRecovery(int tripId, double amount, DateTime date, String? notes) {
+  Future<int> addRecovery(double amount, DateTime date, String? notes) {
     return db.insertDriverCash(DriverCashCompanion.insert(
-      tripId: tripId,
-      amount: -amount, // negative = recovery from driver
+      amount: -amount,
       date: Value(date),
       notes: Value(notes),
     ));
@@ -29,14 +26,14 @@ class DriverCashRepository {
 
   Future<int> deleteDriverCash(int id) => db.deleteDriverCash(id);
 
-  Future<double> netForTrip(int tripId) => db.netDriverCashForTrip(tripId);
+  Future<double> totalNet() => db.totalNetDriverCash();
 }
 
 final driverCashRepositoryProvider = Provider<DriverCashRepository>((ref) {
   return DriverCashRepository(ref.watch(appDatabaseProvider));
 });
 
-final tripDriverCashProvider =
-    StreamProvider.family<List<DriverCashData>, int>((ref, tripId) {
-  return ref.watch(driverCashRepositoryProvider).watchForTrip(tripId);
+final allDriverCashProvider =
+    StreamProvider<List<DriverCashData>>((ref) {
+  return ref.watch(driverCashRepositoryProvider).watchAll();
 });

@@ -27,6 +27,8 @@ class ExpenseRepository {
   Future<int> deleteExpense(int id) => db.deleteExpense(id);
 
   Stream<List<Expense>> watchForTrip(int tripId) => db.watchExpensesForTrip(tripId);
+
+  Stream<List<Expense>> watchAll() => db.watchAllExpenses();
 }
 
 final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
@@ -36,4 +38,8 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
 final tripExpensesProvider =
     StreamProvider.family<List<Expense>, int>((ref, tripId) {
   return ref.watch(expenseRepositoryProvider).watchForTrip(tripId);
+});
+
+final allExpensesProvider = StreamProvider<List<Expense>>((ref) {
+  return ref.watch(expenseRepositoryProvider).watchAll();
 });

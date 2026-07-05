@@ -22,6 +22,8 @@ class MaterialTypes {
   MaterialTypes._();
   static const List<String> values = [
     'Sand',
+    'Wadh Sand',
+    'Wahair Sand',
     'Crush',
     'Bricks',
     'Soil',
