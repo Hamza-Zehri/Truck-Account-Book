@@ -83,7 +83,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                       label: 'Profit',
                       value: formatMoney(s.profit),
                       color: s.profit >= 0 ? AppColors.profitGreen : AppColors.pendingRed,
-                      icon: Icons.savings,
+                      icon: Icons.account_balance_wallet,
                     ),
                   ],
                 ),

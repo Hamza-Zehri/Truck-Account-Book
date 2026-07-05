@@ -11,7 +11,7 @@ class PrefsKeys {
   PrefsKeys._();
   static const String pinHash = 'pin_hash';
   static const String darkMode = 'dark_mode';
-  static const String lastBackupPath = 'last_backup_path';
+  static const String lastBackupDate = 'last_backup_date';
   static const String isFirstLaunch = 'is_first_launch';
 }
 

@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:truck_account_book/core/theme/app_theme.dart';
+import 'package:truck_account_book/data/database/database_provider.dart';
+import 'package:truck_account_book/data/repositories/customer_repository.dart';
+import 'package:truck_account_book/data/repositories/report_repository.dart';
+import 'package:truck_account_book/data/repositories/trip_repository.dart';
 import 'package:truck_account_book/features/auth/auth_provider.dart';
 import 'package:truck_account_book/features/settings/backup_service.dart';
 import 'package:truck_account_book/features/settings/settings_provider.dart';
@@ -65,10 +69,30 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.save_alt_outlined),
+            title: const Text('Save Latest Backup'),
+            subtitle: const Text('Share or save today\'s backup anywhere'),
+            onTap: () async {
+              try {
+                await BackupService.saveToDownloads();
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                }
+              }
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.restore),
             title: const Text('Restore Database'),
             subtitle: const Text('Replace current data from a backup file'),
             onTap: () => _confirmRestore(context),
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete_forever, color: AppColors.pendingRed),
+            title: const Text('Delete All Data'),
+            subtitle: const Text('Remove all trips, customers, expenses, payments'),
+            onTap: () => _confirmDeleteAll(context, ref),
           ),
           const Divider(height: 1),
           const _SectionLabel('Appearance'),
@@ -271,6 +295,37 @@ class SettingsScreen extends ConsumerWidget {
               }
             },
             child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteAll(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete all data?'),
+        content: const Text(
+          'This will permanently remove all trips, customers, expenses, and '
+          'payments. Your PIN and app settings will be kept. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: AppColors.pendingRed),
+            onPressed: () async {
+              await ref.read(appDatabaseProvider).deleteAllData();
+              ref.invalidate(todaySummaryProvider);
+              ref.invalidate(allTripSummariesProvider);
+              ref.invalidate(customerLedgerListProvider);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(const SnackBar(content: Text('All data deleted')));
+              }
+            },
+            child: const Text('Delete Everything'),
           ),
         ],
       ),

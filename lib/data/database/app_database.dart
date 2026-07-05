@@ -188,6 +188,22 @@ class AppDatabase extends _$AppDatabase {
           .get();
 
   // ---------------------------------------------------------------------
+  // Admin (delete all data / daily auto-backup)
+  // ---------------------------------------------------------------------
+
+  /// Deletes all rows from every table, leaving the app in a fresh state.
+  /// Uses a batch so the operation is atomic and FK constraints are checked
+  /// after all deletes finish.
+  Future<void> deleteAllData() async {
+    await batch((b) {
+      b.deleteAll(payments);
+      b.deleteAll(expenses);
+      b.deleteAll(trips);
+      b.deleteAll(customers);
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // Search (simple LIKE-based global search across the fields the spec
   // calls out: customer name, material, trip date, trip amount, notes).
   // ---------------------------------------------------------------------
